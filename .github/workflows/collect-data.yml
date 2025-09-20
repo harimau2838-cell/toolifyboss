@@ -83,7 +83,75 @@ jobs:
                   print(f"❌ Chrome启动失败: {e}")
                   return None
 
-          def collect_toolify_data(target_count=3000):
+          def get_settings_from_db():
+              """从数据库获取采集设置"""
+              try:
+                  import requests
+
+                  url = os.getenv('SUPABASE_URL')
+                  key = os.getenv('SUPABASE_ANON_KEY')
+
+                  if not url or not key:
+                      print("⚠️ 数据库配置缺失，使用默认设置")
+                      return {
+                          'target_count': 3000,
+                          'enabled': True,
+                          'max_scroll_attempts': 60,
+                          'batch_size': 100,
+                          'retry_attempts': 3
+                      }
+
+                  headers = {
+                      'apikey': key,
+                      'Authorization': f'Bearer {key}',
+                      'Content-Type': 'application/json'
+                  }
+
+                  response = requests.get(f'{url}/rest/v1/system_settings', headers=headers)
+
+                  if response.status_code == 200:
+                      settings_data = response.json()
+                      settings = {}
+
+                      for setting in settings_data:
+                          key_name = setting['setting_key']
+                          value = setting['setting_value']
+
+                          # 类型转换
+                          if setting['setting_type'] == 'number':
+                              value = int(value)
+                          elif setting['setting_type'] == 'boolean':
+                              value = value.lower() == 'true'
+
+                          settings[key_name] = value
+
+                      return {
+                          'target_count': settings.get('collection_target_count', 3000),
+                          'enabled': settings.get('collection_enabled', True),
+                          'max_scroll_attempts': settings.get('max_scroll_attempts', 60),
+                          'batch_size': settings.get('batch_size', 100),
+                          'retry_attempts': settings.get('retry_attempts', 3)
+                      }
+                  else:
+                      print(f"⚠️ 获取设置失败: {response.status_code}")
+                      return {
+                          'target_count': 3000,
+                          'enabled': True,
+                          'max_scroll_attempts': 60,
+                          'batch_size': 100,
+                          'retry_attempts': 3
+                      }
+              except Exception as e:
+                  print(f"⚠️ 获取设置出错: {e}")
+                  return {
+                      'target_count': 3000,
+                      'enabled': True,
+                      'max_scroll_attempts': 60,
+                      'batch_size': 100,
+                      'retry_attempts': 3
+                  }
+
+          def collect_toolify_data(target_count=3000, max_scroll_attempts=60):
               """采集Toolify数据"""
               print(f"🚀 开始采集最多 {target_count} 条工具数据...")
 
@@ -247,8 +315,20 @@ jobs:
               print("🎯 Toolify生产环境数据采集")
               print("=" * 50)
 
+              # 从数据库获取设置
+              settings = get_settings_from_db()
+              print(f"📋 采集设置: {settings}")
+
+              # 检查是否启用采集
+              if not settings['enabled']:
+                  print("⏸️ 定时采集已禁用，跳过执行")
+                  return
+
               # 采集数据
-              tools_data = collect_toolify_data(3000)
+              tools_data = collect_toolify_data(
+                  target_count=settings['target_count'],
+                  max_scroll_attempts=settings['max_scroll_attempts']
+              )
 
               if not tools_data:
                   print("💥 采集失败，没有获取到数据")

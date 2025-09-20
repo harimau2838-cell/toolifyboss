@@ -30,3 +30,31 @@ export interface StatsData {
   excluded_count: number
   last_collection: string
 }
+
+export interface SystemSetting {
+  id?: string
+  setting_key: string
+  setting_value: string
+  setting_type: 'number' | 'boolean' | 'string' | 'json'
+  description?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface CollectionSettings {
+  target_count: number
+  enabled: boolean
+  frequency: 'daily' | 'weekly' | 'monthly'
+  day_of_month: number
+  hour: number
+  max_scroll_attempts: number
+  batch_size: number
+  retry_attempts: number
+}
+
+export interface CollectionStatus {
+  status: 'idle' | 'running' | 'completed' | 'failed'
+  last_collection_time: string
+  current_count?: number
+  error_message?: string
+}

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Heart, X, BarChart3 } from 'lucide-react'
+import { Home, Heart, X, BarChart3, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
@@ -20,6 +20,11 @@ const navItems = [
     href: '/excluded',
     label: '排除列表',
     icon: X,
+  },
+  {
+    href: '/settings',
+    label: '系统设置',
+    icon: Settings,
   },
 ]
 
