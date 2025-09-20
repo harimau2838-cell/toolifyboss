@@ -137,3 +137,33 @@ export async function GET() {
     )
   }
 }
+
+// 重置采集状态
+export async function PATCH() {
+  try {
+    const { supabase } = await import('@/lib/supabase')
+
+    await supabase
+      .from('system_settings')
+      .upsert({
+        setting_key: 'collection_status',
+        setting_value: 'idle',
+        setting_type: 'string',
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'setting_key'
+      })
+
+    return NextResponse.json({
+      success: true,
+      message: 'Collection status reset to idle'
+    })
+
+  } catch (error) {
+    console.error('Collection Status Reset Error:', error)
+    return NextResponse.json(
+      { success: false, error: 'Failed to reset collection status' },
+      { status: 500 }
+    )
+  }
+}

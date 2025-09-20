@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Settings, Play, Pause, Save, RefreshCw, Clock, Database, Zap } from 'lucide-react'
+import { Settings, Play, Pause, Save, RefreshCw, Clock, Database, Zap, Square, CheckCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CollectionSettings, CollectionStatus } from '@/types'
@@ -26,6 +26,8 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [triggering, setTriggering] = useState(false)
+  const [resetting, setResetting] = useState(false)
+  const [checking, setChecking] = useState(false)
 
   useEffect(() => {
     loadSettings()
@@ -150,6 +152,60 @@ export default function SettingsPage() {
     }
   }
 
+  const resetStatus = async () => {
+    try {
+      setResetting(true)
+
+      const response = await fetch('/api/collection/trigger', {
+        method: 'PATCH'
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        alert('状态已重置为空闲')
+        setStatus(prev => ({
+          ...prev,
+          status: 'idle'
+        }))
+      } else {
+        alert('重置失败：' + result.error)
+      }
+    } catch (error) {
+      console.error('Failed to reset status:', error)
+      alert('重置失败，请重试')
+    } finally {
+      setResetting(false)
+    }
+  }
+
+  const checkGitHubStatus = async () => {
+    try {
+      setChecking(true)
+
+      const response = await fetch('/api/collection/status')
+      const result = await response.json()
+
+      if (result.success) {
+        setStatus(prev => ({
+          ...prev,
+          status: result.collection_status
+        }))
+
+        if (result.collection_status !== 'running') {
+          alert(`状态已更新: ${getStatusText(result.collection_status)}`)
+        }
+      } else {
+        alert('检查状态失败：' + result.error)
+      }
+    } catch (error) {
+      console.error('Failed to check GitHub status:', error)
+      alert('检查状态失败，请重试')
+    } finally {
+      setChecking(false)
+    }
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'running':
@@ -226,7 +282,7 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              <div className="pt-2">
+              <div className="pt-2 space-y-2">
                 <Button
                   onClick={triggerCollection}
                   disabled={triggering || status.status === 'running'}
@@ -239,6 +295,38 @@ export default function SettingsPage() {
                   )}
                   <span>{triggering ? '触发中...' : '立即采集'}</span>
                 </Button>
+
+                {status.status === 'running' && (
+                  <>
+                    <Button
+                      onClick={checkGitHubStatus}
+                      disabled={checking}
+                      variant="outline"
+                      className="w-full flex items-center space-x-2"
+                    >
+                      {checking ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <CheckCircle className="h-4 w-4" />
+                      )}
+                      <span>{checking ? '检查中...' : '检查实际状态'}</span>
+                    </Button>
+
+                    <Button
+                      onClick={resetStatus}
+                      disabled={resetting}
+                      variant="outline"
+                      className="w-full flex items-center space-x-2 text-red-600 border-red-200 hover:bg-red-50"
+                    >
+                      {resetting ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Square className="h-4 w-4" />
+                      )}
+                      <span>{resetting ? '重置中...' : '强制重置状态'}</span>
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           </div>
