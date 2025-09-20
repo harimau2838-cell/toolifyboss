@@ -48,9 +48,13 @@ export default function SettingsPage() {
           batch_size: result.data.batch_size || 100,
           retry_attempts: result.data.retry_attempts || 3
         })
+      } else {
+        console.error('Failed to load settings:', result)
+        alert('加载设置失败：' + (result.details || result.error))
       }
     } catch (error) {
       console.error('Failed to load settings:', error)
+      alert('加载设置失败，请检查网络连接')
     } finally {
       setLoading(false)
     }
@@ -100,7 +104,9 @@ export default function SettingsPage() {
       if (result.success) {
         alert('设置保存成功！')
       } else {
-        alert('保存失败：' + result.error)
+        const errorMessage = result.details ? `${result.error}: ${result.details}` : result.error
+        alert('保存失败：' + errorMessage)
+        console.error('Settings save error:', result)
       }
     } catch (error) {
       console.error('Failed to save settings:', error)

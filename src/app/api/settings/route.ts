@@ -68,7 +68,11 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Settings API Error:', error)
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch settings' },
+      {
+        success: false,
+        error: 'Failed to fetch settings',
+        details: error instanceof Error ? error.message : String(error)
+      },
       { status: 500 }
     )
   }
@@ -128,7 +132,11 @@ export async function PUT(request: NextRequest) {
   } catch (error) {
     console.error('Settings Update Error:', error)
     return NextResponse.json(
-      { success: false, error: 'Failed to update settings' },
+      {
+        success: false,
+        error: 'Failed to update settings',
+        details: error instanceof Error ? error.message : String(error)
+      },
       { status: 500 }
     )
   }
