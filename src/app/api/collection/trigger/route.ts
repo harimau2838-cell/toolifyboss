@@ -6,6 +6,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { target_count } = body
 
+    console.log('🎯 API收到触发请求:', body)
+    console.log('📊 解析的target_count:', target_count)
+
     // GitHub Personal Access Token 需要在环境变量中配置
     const githubToken = process.env.REPO_TOKEN
     const repoOwner = 'harimau2838-cell'
@@ -28,6 +31,8 @@ export async function POST(request: NextRequest) {
         target_count: target_count?.toString() || '3000'
       }
     }
+
+    console.log('🚀 发送到GitHub的payload:', workflowPayload)
 
     const response = await fetch(
       `https://api.github.com/repos/${repoOwner}/${repoName}/actions/workflows/collect-data.yml/dispatches`,

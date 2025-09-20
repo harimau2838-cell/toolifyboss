@@ -122,6 +122,9 @@ export default function SettingsPage() {
     try {
       setTriggering(true)
 
+      console.log('🎯 触发采集，当前设置:', settings)
+      console.log('📊 发送的target_count:', settings.target_count)
+
       const response = await fetch('/api/collection/trigger', {
         method: 'POST',
         headers: {
