@@ -34,21 +34,50 @@ jobs:
       - name: Install Chrome and ChromeDriver
         run: |
           sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
+          sudo apt-get install -y google-chrome-stable unzip wget
 
-          # 安装ChromeDriver
-          CHROME_VERSION=$(google-chrome --version | cut -d " " -f3 | cut -d "." -f1)
+          # 获取Chrome版本
+          CHROME_VERSION=$(google-chrome --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          MAJOR_VERSION=$(echo $CHROME_VERSION | cut -d. -f1)
           echo "Chrome version: $CHROME_VERSION"
+          echo "Chrome major version: $MAJOR_VERSION"
 
-          # 下载对应版本的ChromeDriver
-          sudo apt-get install -y unzip wget
-          CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION")
-          echo "ChromeDriver version: $CHROMEDRIVER_VERSION"
+          # 尝试安装ChromeDriver（多种方法）
+          # 方法1: 使用apt安装（最简单）
+          if sudo apt-get install -y chromium-chromedriver; then
+            echo "✅ 使用apt安装ChromeDriver成功"
+            sudo ln -sf /usr/bin/chromedriver /usr/local/bin/chromedriver 2>/dev/null || true
+          else
+            echo "⚠️ apt安装失败，尝试手动下载..."
 
-          wget -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip
-          sudo unzip /tmp/chromedriver.zip -d /usr/local/bin/
-          sudo chmod +x /usr/local/bin/chromedriver
-          chromedriver --version
+            # 方法2: 手动下载稳定版本
+            CHROMEDRIVER_VERSION="120.0.6099.109"
+            echo "Using ChromeDriver version: $CHROMEDRIVER_VERSION"
+
+            DOWNLOAD_URL="https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip"
+            echo "Download URL: $DOWNLOAD_URL"
+
+            if wget -O /tmp/chromedriver.zip "$DOWNLOAD_URL"; then
+              sudo unzip /tmp/chromedriver.zip -d /tmp/
+              sudo mv /tmp/chromedriver /usr/local/bin/chromedriver
+              sudo chmod +x /usr/local/bin/chromedriver
+            else
+              echo "❌ ChromeDriver下载失败，尝试使用webdriver-manager"
+            fi
+          fi
+
+          # 验证ChromeDriver是否可用
+          if [ -f "/usr/local/bin/chromedriver" ]; then
+            echo "✅ ChromeDriver安装成功:"
+            ls -la /usr/local/bin/chromedriver
+            /usr/local/bin/chromedriver --version
+          elif [ -f "/usr/bin/chromedriver" ]; then
+            echo "✅ 使用系统ChromeDriver:"
+            ls -la /usr/bin/chromedriver
+            /usr/bin/chromedriver --version
+          else
+            echo "⚠️ ChromeDriver安装可能有问题，将依赖webdriver-manager"
+          fi
 
       - name: Setup Chrome for headless mode
         run: |
