@@ -156,12 +156,23 @@ jobs:
                           'retry_attempts': 3
                       }
 
-                  # 清理环境变量中的无效字符
+                  # 清理环境变量中的无效字符和GitHub标记
                   url = url.strip()
-                  key = key.strip().replace('***', '')  # 移除GitHub显示的***标记
+                  key = key.strip()
 
-                  print(f"🔗 连接数据库: {url[:30]}...")
+                  # 移除可能的GitHub标记
+                  if '***' in key:
+                      print("⚠️ 检测到GitHub标记，尝试清理...")
+                      key = key.replace('***', '')
+
+                  # 移除其他可能的无效字符
+                  import re
+                  key = re.sub(r'[^\w\-\.]', '', key)  # 只保留字母数字和.-_
+
+                  print(f"🔗 连接数据库: {url[:50]}...")
                   print(f"🔑 密钥长度: {len(key)} 字符")
+                  print(f"🔑 密钥开头: {key[:10]}...")
+                  print(f"🔑 密钥结尾: ...{key[-10:]}")
 
                   headers = {
                       'apikey': key,
@@ -338,9 +349,21 @@ jobs:
                   print("❌ Supabase配置缺失")
                   return False
 
-              # 清理环境变量中的无效字符
+              # 清理环境变量中的无效字符和GitHub标记
               url = url.strip()
-              key = key.strip().replace('***', '')
+              key = key.strip()
+
+              # 移除可能的GitHub标记
+              if '***' in key:
+                  print("⚠️ 上传时检测到GitHub标记，清理中...")
+                  key = key.replace('***', '')
+
+              # 移除其他可能的无效字符
+              import re
+              key = re.sub(r'[^\w\-\.]', '', key)  # 只保留字母数字和.-_
+
+              print(f"📤 上传到: {url[:50]}...")
+              print(f"🔑 上传密钥长度: {len(key)} 字符")
 
               headers = {
                   'apikey': key,
@@ -435,7 +458,11 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          INPUT_TARGET_COUNT: ${{ github.event.inputs.target_count }}
         run: |
+          echo "🔧 环境变量检查:"
+          echo "   TARGET_COUNT输入: ${{ github.event.inputs.target_count }}"
+          echo "   INPUT_TARGET_COUNT: $INPUT_TARGET_COUNT"
           python scripts/production-collector.py
 
       - name: Upload backup on failure
