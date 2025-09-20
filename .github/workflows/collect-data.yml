@@ -471,6 +471,9 @@ jobs:
                       if response.status_code in [200, 201]:
                           success_count += len(batch)
                           print(f"✅ 批次 {i//batch_size + 1} 上传成功 ({len(batch)} 条)")
+                      elif response.status_code == 409:
+                          print(f"⚠️ 批次 {i//batch_size + 1} 包含重复数据，跳过")
+                          success_count += len(batch)  # 重复数据也算成功，因为数据已存在
                       else:
                           print(f"❌ 批次 {i//batch_size + 1} 上传失败: {response.status_code} {response.text}")
 
