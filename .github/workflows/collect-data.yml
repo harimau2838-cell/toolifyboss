@@ -1,0 +1,301 @@
+name: Toolify Data Collection
+
+on:
+  schedule:
+    # 每月2号凌晨2点执行 (UTC时间)
+    - cron: '0 2 2 * *'
+  workflow_dispatch:  # 支持手动触发
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: |
+          pip install selenium webdriver-manager requests python-dotenv
+
+      - name: Install Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+
+      - name: Setup Chrome for headless mode
+        run: |
+          # 创建优化的采集器脚本
+          cat > scripts/production-collector.py << 'EOF'
+          #!/usr/bin/env python3
+          """
+          生产环境Toolify数据采集器
+          """
+          import os
+          import time
+          import json
+          import requests
+          from datetime import datetime
+          from selenium import webdriver
+          from selenium.webdriver.common.by import By
+          from selenium.webdriver.support.ui import WebDriverWait
+          from selenium.webdriver.support import expected_conditions as EC
+          from selenium.webdriver.chrome.service import Service
+          from webdriver_manager.chrome import ChromeDriverManager
+
+          def setup_driver():
+              """设置Chrome浏览器 - 生产环境优化版本"""
+              options = webdriver.ChromeOptions()
+
+              # 生产环境Chrome设置
+              options.add_argument("--headless")
+              options.add_argument("--no-sandbox")
+              options.add_argument("--disable-dev-shm-usage")
+              options.add_argument("--disable-gpu")
+              options.add_argument("--disable-web-security")
+              options.add_argument("--disable-features=VizDisplayCompositor")
+              options.add_argument("--window-size=1920,1080")
+              options.add_argument("--lang=zh-CN")
+
+              # 反检测设置
+              options.add_argument("--disable-blink-features=AutomationControlled")
+              options.add_argument("--disable-extensions")
+              options.add_experimental_option("excludeSwitches", ["enable-automation"])
+              options.add_experimental_option('useAutomationExtension', False)
+
+              # 更真实的用户代理
+              user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+              options.add_argument(f"--user-agent={user_agent}")
+
+              try:
+                  service = Service(ChromeDriverManager().install())
+                  driver = webdriver.Chrome(service=service, options=options)
+                  driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+                  return driver
+              except Exception as e:
+                  print(f"❌ Chrome启动失败: {e}")
+                  return None
+
+          def collect_toolify_data(target_count=3000):
+              """采集Toolify数据"""
+              print(f"🚀 开始采集最多 {target_count} 条工具数据...")
+
+              driver = setup_driver()
+              if not driver:
+                  return []
+
+              tools_data = []
+
+              try:
+                  url = "https://www.toolify.ai/zh/Best-trending-AI-Tools"
+                  print(f"📱 正在访问: {url}")
+
+                  driver.get(url)
+                  time.sleep(10)  # 增加等待时间
+
+                  print("🔍 开始数据采集...")
+
+                  scroll_attempts = 0
+                  max_scroll_attempts = 60  # 最多滚动60次
+                  no_new_data_count = 0
+
+                  while len(tools_data) < target_count and scroll_attempts < max_scroll_attempts:
+                      try:
+                          current_rows = driver.find_elements(By.CSS_SELECTOR, "tr.el-table__row")
+
+                          if not current_rows:
+                              print("⚠️ 未找到数据行，等待页面加载...")
+                              time.sleep(5)
+                              scroll_attempts += 1
+                              continue
+
+                          # 提取新数据
+                          initial_count = len(tools_data)
+                          for i in range(len(tools_data), min(len(current_rows), target_count)):
+                              try:
+                                  row = current_rows[i]
+
+                                  # 提取工具数据
+                                  tool_link = row.find_element(By.CSS_SELECTOR, ".go-tool")
+                                  tool_name = tool_link.text.strip()
+                                  tool_url = tool_link.get_attribute("href")
+
+                                  cells = row.find_elements(By.TAG_NAME, "td")
+
+                                  tool_data = {
+                                      "ranking": i + 1,
+                                      "tool_name": tool_name,
+                                      "tool_url": f"https://www.toolify.ai{tool_url}" if tool_url.startswith("/") else tool_url,
+                                      "monthly_visits": cells[2].find_element(By.TAG_NAME, "span").text.strip() if len(cells) > 2 else "",
+                                      "growth": cells[3].find_element(By.TAG_NAME, "span").text.strip() if len(cells) > 3 else "",
+                                      "growth_rate": cells[4].find_element(By.TAG_NAME, "span").text.strip() if len(cells) > 4 else "",
+                                      "description": cells[5].find_element(By.TAG_NAME, "p").text.strip() if len(cells) > 5 else "",
+                                      "tags": cells[6].find_element(By.TAG_NAME, "p").text.strip() if len(cells) > 6 else "",
+                                      "collected_at": datetime.now().isoformat(),
+                                      "collection_batch": f"github-actions-{datetime.now().strftime('%Y-%m-%d')}"
+                                  }
+
+                                  tools_data.append(tool_data)
+
+                                  if len(tools_data) % 50 == 0:
+                                      print(f"📊 已采集 {len(tools_data)} 条数据...")
+
+                              except Exception as e:
+                                  print(f"❌ 提取第{i+1}行数据失败: {e}")
+
+                          # 检查是否有新数据
+                          if len(tools_data) == initial_count:
+                              no_new_data_count += 1
+                              if no_new_data_count >= 3:
+                                  print("🛑 连续多次无新数据，停止采集")
+                                  break
+                          else:
+                              no_new_data_count = 0
+
+                          # 如果达到目标数量，退出
+                          if len(tools_data) >= target_count:
+                              print(f"🎉 已达到目标数量 {target_count} 条！")
+                              break
+
+                          # 智能滚动策略
+                          print(f"🔄 滚动加载更多数据... (第{scroll_attempts + 1}次)")
+
+                          if scroll_attempts % 3 == 0:
+                              driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                          elif scroll_attempts % 3 == 1:
+                              driver.execute_script("window.scrollBy(0, 3000);")
+                          else:
+                              driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                              time.sleep(2)
+                              driver.execute_script("window.scrollBy(0, -200);")
+
+                          time.sleep(8)  # 增加等待时间
+                          scroll_attempts += 1
+
+                      except Exception as e:
+                          print(f"❌ 滚动采集出错: {e}")
+                          scroll_attempts += 1
+                          time.sleep(5)
+
+                  print(f"✅ 采集完成！共获取 {len(tools_data)} 条数据")
+                  return tools_data[:target_count]
+
+              except Exception as e:
+                  print(f"❌ 采集过程出错: {e}")
+                  return tools_data
+
+              finally:
+                  print("🔚 关闭浏览器...")
+                  driver.quit()
+
+          def upload_to_supabase(tools_data):
+              """上传数据到Supabase"""
+              if not tools_data:
+                  print("❌ 没有数据需要上传")
+                  return False
+
+              url = os.getenv('SUPABASE_URL')
+              key = os.getenv('SUPABASE_ANON_KEY')
+
+              if not url or not key:
+                  print("❌ Supabase配置缺失")
+                  return False
+
+              headers = {
+                  'apikey': key,
+                  'Authorization': f'Bearer {key}',
+                  'Content-Type': 'application/json',
+                  'Prefer': 'resolution=merge-duplicates'
+              }
+
+              # 批量上传
+              batch_size = 100
+              success_count = 0
+
+              for i in range(0, len(tools_data), batch_size):
+                  batch = tools_data[i:i + batch_size]
+
+                  try:
+                      response = requests.post(
+                          f'{url}/rest/v1/toolify_tools',
+                          headers=headers,
+                          json=batch,
+                          timeout=30
+                      )
+
+                      if response.status_code in [200, 201]:
+                          success_count += len(batch)
+                          print(f"✅ 批次 {i//batch_size + 1} 上传成功 ({len(batch)} 条)")
+                      else:
+                          print(f"❌ 批次 {i//batch_size + 1} 上传失败: {response.status_code} {response.text}")
+
+                  except Exception as e:
+                      print(f"❌ 批次 {i//batch_size + 1} 上传出错: {e}")
+
+              print(f"📊 上传完成: {success_count}/{len(tools_data)} 条数据成功")
+              return success_count > 0
+
+          def main():
+              print("=" * 50)
+              print("🎯 Toolify生产环境数据采集")
+              print("=" * 50)
+
+              # 采集数据
+              tools_data = collect_toolify_data(3000)
+
+              if not tools_data:
+                  print("💥 采集失败，没有获取到数据")
+                  exit(1)
+
+              # 保存本地备份
+              backup_file = f"toolify-backup-{datetime.now().strftime('%Y-%m-%d')}.json"
+              with open(backup_file, 'w', encoding='utf-8') as f:
+                  json.dump(tools_data, f, ensure_ascii=False, indent=2)
+              print(f"💾 本地备份已保存: {backup_file}")
+
+              # 上传到Supabase
+              upload_success = upload_to_supabase(tools_data)
+
+              if upload_success:
+                  print("🎉 数据采集和上传任务完成！")
+              else:
+                  print("💥 数据上传失败")
+                  exit(1)
+
+          if __name__ == "__main__":
+              main()
+          EOF
+
+      - name: Run data collection
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          python scripts/production-collector.py
+
+      - name: Upload backup on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collection-backup-${{ github.run_number }}
+          path: toolify-backup-*.json
+          retention-days: 30
+
+      - name: Notify on success
+        if: success()
+        run: |
+          echo "✅ 数据采集成功完成于 $(date)"
+          echo "📊 查看最新数据: https://your-toolify-app.vercel.app"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ 数据采集失败于 $(date)"
+          echo "📋 请检查日志和备份文件"
