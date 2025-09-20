@@ -29,7 +29,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install selenium webdriver-manager requests python-dotenv
+          pip install -r requirements.txt
 
       - name: Install Chrome
         run: |
@@ -38,6 +38,8 @@ jobs:
 
       - name: Setup Chrome for headless mode
         run: |
+          # 创建scripts目录
+          mkdir -p scripts
           # 创建优化的采集器脚本
           cat > scripts/production-collector.py << 'EOF'
           #!/usr/bin/env python3
@@ -353,7 +355,7 @@ jobs:
                   exit(1)
 
               # 保存本地备份
-              backup_file = f"toolify-backup-{datetime.now().strftime('%Y-%m-%d')}.json"
+              backup_file = f"./toolify-backup-{datetime.now().strftime('%Y-%m-%d')}.json"
               with open(backup_file, 'w', encoding='utf-8') as f:
                   json.dump(tools_data, f, ensure_ascii=False, indent=2)
               print(f"💾 本地备份已保存: {backup_file}")
@@ -383,8 +385,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: collection-backup-${{ github.run_number }}
-          path: toolify-backup-*.json
+          path: ./toolify-backup-*.json
           retention-days: 30
+          if-no-files-found: ignore
 
       - name: Notify on success
         if: success()
