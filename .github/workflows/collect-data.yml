@@ -89,17 +89,33 @@ jobs:
           """
           生产环境Toolify数据采集器
           """
+          print("🚀 Python脚本开始执行...")
+          print("📦 开始导入模块...")
+
           import os
+          print("✅ os 模块导入成功")
           import time
+          print("✅ time 模块导入成功")
           import json
+          print("✅ json 模块导入成功")
           import requests
+          print("✅ requests 模块导入成功")
           from datetime import datetime
+          print("✅ datetime 模块导入成功")
           from selenium import webdriver
+          print("✅ selenium webdriver 模块导入成功")
           from selenium.webdriver.common.by import By
+          print("✅ selenium By 模块导入成功")
           from selenium.webdriver.support.ui import WebDriverWait
+          print("✅ selenium WebDriverWait 模块导入成功")
           from selenium.webdriver.support import expected_conditions as EC
+          print("✅ selenium expected_conditions 模块导入成功")
           from selenium.webdriver.chrome.service import Service
+          print("✅ selenium Service 模块导入成功")
           from webdriver_manager.chrome import ChromeDriverManager
+          print("✅ webdriver_manager 模块导入成功")
+
+          print("🎯 所有模块导入完成，开始定义函数...")
 
           def setup_driver():
               """设置Chrome浏览器 - 生产环境优化版本"""
@@ -169,11 +185,15 @@ jobs:
 
           def get_settings_from_db():
               """从数据库获取采集设置"""
+              print("🏗️ get_settings_from_db 函数开始")
               try:
+                  print("📦 导入requests模块...")
                   import requests
 
+                  print("🔍 获取环境变量...")
                   url = os.getenv('SUPABASE_URL')
                   key = os.getenv('SUPABASE_ANON_KEY')
+                  print(f"📊 环境变量状态: URL={bool(url)}, KEY={bool(key)}")
 
                   if not url or not key:
                       print("⚠️ 数据库配置缺失，使用默认设置")
@@ -461,12 +481,15 @@ jobs:
               return success_count > 0
 
           def main():
+              print("🔥 main函数开始执行")
               print("=" * 50)
               print("🎯 Toolify生产环境数据采集")
               print("=" * 50)
 
+              print("🔗 准备从数据库获取设置...")
               # 从数据库获取设置
               settings = get_settings_from_db()
+              print("✅ 数据库设置获取完成")
               print(f"📋 采集设置: {settings}")
 
               # 检查是否是手动触发
@@ -512,7 +535,9 @@ jobs:
                   exit(1)
 
           if __name__ == "__main__":
+              print("🎬 进入main函数...")
               main()
+              print("🏁 main函数执行完成")
           EOF
 
       - name: Run data collection
