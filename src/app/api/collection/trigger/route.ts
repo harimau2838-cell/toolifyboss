@@ -22,6 +22,13 @@ export async function POST(request: NextRequest) {
     }
 
     // 触发GitHub Actions工作流
+    const workflowPayload = {
+      ref: 'main',
+      inputs: {
+        target_count: target_count?.toString() || '3000'
+      }
+    }
+
     const response = await fetch(
       `https://api.github.com/repos/${repoOwner}/${repoName}/actions/workflows/collect-data.yml/dispatches`,
       {
@@ -30,13 +37,9 @@ export async function POST(request: NextRequest) {
           'Authorization': `Bearer ${githubToken}`,
           'Accept': 'application/vnd.github.v3+json',
           'Content-Type': 'application/json',
+          'User-Agent': 'toolify-monitor-app'
         },
-        body: JSON.stringify({
-          ref: 'main',
-          inputs: {
-            target_count: target_count?.toString() || '3000'
-          }
-        })
+        body: JSON.stringify(workflowPayload)
       }
     )
 

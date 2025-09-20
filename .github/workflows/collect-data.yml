@@ -5,6 +5,12 @@ on:
     # 每月2号凌晨2点执行 (UTC时间)
     - cron: '0 2 2 * *'
   workflow_dispatch:  # 支持手动触发
+    inputs:
+      target_count:
+        description: '采集目标数量'
+        required: false
+        default: '3000'
+        type: string
 
 jobs:
   collect:
@@ -319,15 +325,27 @@ jobs:
               settings = get_settings_from_db()
               print(f"📋 采集设置: {settings}")
 
-              # 检查是否启用采集
-              if not settings['enabled']:
-                  print("⏸️ 定时采集已禁用，跳过执行")
-                  return
+              # 检查是否是手动触发
+              manual_target = os.getenv('INPUT_TARGET_COUNT')
+              if manual_target:
+                  print(f"🎯 手动触发，目标数量: {manual_target}")
+                  target_count = int(manual_target)
+                  max_scroll_attempts = settings['max_scroll_attempts']
+              else:
+                  # 自动执行，检查是否启用
+                  if not settings['enabled']:
+                      print("⏸️ 定时采集已禁用，跳过执行")
+                      return
+
+                  target_count = settings['target_count']
+                  max_scroll_attempts = settings['max_scroll_attempts']
+
+              print(f"🎯 最终采集目标: {target_count} 条")
 
               # 采集数据
               tools_data = collect_toolify_data(
-                  target_count=settings['target_count'],
-                  max_scroll_attempts=settings['max_scroll_attempts']
+                  target_count=target_count,
+                  max_scroll_attempts=max_scroll_attempts
               )
 
               if not tools_data:
