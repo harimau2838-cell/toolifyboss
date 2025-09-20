@@ -31,10 +31,24 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      - name: Install Chrome
+      - name: Install Chrome and ChromeDriver
         run: |
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable
+
+          # 安装ChromeDriver
+          CHROME_VERSION=$(google-chrome --version | cut -d " " -f3 | cut -d "." -f1)
+          echo "Chrome version: $CHROME_VERSION"
+
+          # 下载对应版本的ChromeDriver
+          sudo apt-get install -y unzip wget
+          CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION")
+          echo "ChromeDriver version: $CHROMEDRIVER_VERSION"
+
+          wget -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip
+          sudo unzip /tmp/chromedriver.zip -d /usr/local/bin/
+          sudo chmod +x /usr/local/bin/chromedriver
+          chromedriver --version
 
       - name: Setup Chrome for headless mode
         run: |
@@ -83,12 +97,45 @@ jobs:
               options.add_argument(f"--user-agent={user_agent}")
 
               try:
-                  service = Service(ChromeDriverManager().install())
+                  # 尝试多种ChromeDriver安装方法
+                  driver_path = None
+
+                  try:
+                      # 方法1: 优先使用系统安装的ChromeDriver
+                      system_paths = ["/usr/local/bin/chromedriver", "/usr/bin/chromedriver"]
+                      for path in system_paths:
+                          if os.path.exists(path):
+                              driver_path = path
+                              print(f"📦 使用系统ChromeDriver: {driver_path}")
+                              break
+
+                      if not driver_path:
+                          # 方法2: 使用webdriver-manager作为备选
+                          print("🔄 使用webdriver-manager下载ChromeDriver...")
+                          driver_path = ChromeDriverManager().install()
+                          print(f"📦 ChromeDriver路径: {driver_path}")
+
+                          # 确保有执行权限
+                          import stat
+                          current_permissions = os.stat(driver_path).st_mode
+                          os.chmod(driver_path, current_permissions | stat.S_IEXEC)
+                          print("✅ ChromeDriver权限已设置")
+
+                  except Exception as e:
+                      print(f"⚠️ ChromeDriver设置失败: {e}")
+                      driver_path = "chromedriver"  # 最后尝试PATH中的chromedriver
+
+                  service = Service(driver_path)
                   driver = webdriver.Chrome(service=service, options=options)
                   driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+                  print("✅ Chrome浏览器启动成功")
                   return driver
+
               except Exception as e:
                   print(f"❌ Chrome启动失败: {e}")
+                  print(f"🔍 错误类型: {type(e).__name__}")
+                  import traceback
+                  print(f"📋 详细错误: {traceback.format_exc()}")
                   return None
 
           def get_settings_from_db():
@@ -108,6 +155,13 @@ jobs:
                           'batch_size': 100,
                           'retry_attempts': 3
                       }
+
+                  # 清理环境变量中的无效字符
+                  url = url.strip()
+                  key = key.strip().replace('***', '')  # 移除GitHub显示的***标记
+
+                  print(f"🔗 连接数据库: {url[:30]}...")
+                  print(f"🔑 密钥长度: {len(key)} 字符")
 
                   headers = {
                       'apikey': key,
@@ -283,6 +337,10 @@ jobs:
               if not url or not key:
                   print("❌ Supabase配置缺失")
                   return False
+
+              # 清理环境变量中的无效字符
+              url = url.strip()
+              key = key.strip().replace('***', '')
 
               headers = {
                   'apikey': key,
