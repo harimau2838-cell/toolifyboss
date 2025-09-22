@@ -53,7 +53,8 @@ export const toolsApi = {
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
     // 获取不同采集批次的数据
-    const uniqueBatches = [...new Set(tools?.map(tool => tool.collection_batch) || [])]
+    const batches = tools?.map(tool => tool.collection_batch) || []
+    const uniqueBatches = Array.from(new Set(batches))
 
     let recentNew = 0
     if (uniqueBatches.length <= 1) {
