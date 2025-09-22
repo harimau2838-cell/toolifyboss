@@ -320,6 +320,16 @@ def upload_to_supabase(tools_data):
 
     print(f"📤 准备上传 {len(tools_data)} 条数据...")
 
+    # 验证数据格式
+    print("🔍 验证数据格式...")
+    for i, tool in enumerate(tools_data[:3]):  # 检查前3条
+        required_fields = ['tool_name', 'tool_url', 'ranking']
+        missing_fields = [field for field in required_fields if not tool.get(field)]
+        if missing_fields:
+            print(f"⚠️ 第{i+1}条数据缺少字段: {missing_fields}")
+        else:
+            print(f"✅ 第{i+1}条数据格式正确: {tool['tool_name']}")
+
     # 测试连接
     headers = {
         'apikey': key,
@@ -341,8 +351,15 @@ def upload_to_supabase(tools_data):
         return False
 
     # 逐条上传，增加重试机制
+    print(f"🚀 开始逐条上传 {len(tools_data)} 条数据...")
     success_count = 0
+
     for i, tool in enumerate(tools_data):
+        if i % 50 == 0:
+            print(f"📊 开始处理第 {i+1} 条数据: {tool.get('tool_name', 'Unknown')[:30]}...")
+
+        if i == 0:
+            print(f"🔍 首条数据详情: {tool}")  # 显示第一条数据的完整内容
         max_retries = 3
         retry_count = 0
 
