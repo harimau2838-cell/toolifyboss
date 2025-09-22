@@ -29,37 +29,48 @@ export const toolsApi = {
 
   // 获取工具统计数据
   async getStats() {
-    const { data: tools, error: toolsError } = await supabase
+    // 使用count查询获取精确计数，避免缓存问题
+    const { count: toolsCount, error: toolsError } = await supabase
       .from('toolify_tools')
-      .select('id, created_at')
+      .select('*', { count: 'exact', head: true })
 
-    const { data: favorites, error: favoritesError } = await supabase
+    const { count: favoritesCount, error: favoritesError } = await supabase
       .from('user_actions')
-      .select('id')
+      .select('*', { count: 'exact', head: true })
       .eq('action_type', 'favorite')
 
-    const { data: excluded, error: excludedError } = await supabase
+    const { count: excludedCount, error: excludedError } = await supabase
       .from('user_actions')
-      .select('id')
+      .select('*', { count: 'exact', head: true })
       .eq('action_type', 'exclude')
 
-    if (toolsError || favoritesError || excludedError) {
-      throw toolsError || favoritesError || excludedError
+    // 获取最新记录用于计算本月新增和最后采集时间
+    const { data: recentTools, error: recentError } = await supabase
+      .from('toolify_tools')
+      .select('created_at, collected_at')
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    if (toolsError || favoritesError || excludedError || recentError) {
+      throw toolsError || favoritesError || excludedError || recentError
     }
 
     // 计算本月新增
     const now = new Date()
     const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const monthlyNew = tools?.filter(tool =>
+    const monthlyNew = recentTools?.filter(tool =>
       new Date(tool.created_at!) >= thisMonth
     ).length || 0
 
+    // 获取最后采集时间
+    const lastCollection = recentTools?.[0]?.collected_at || recentTools?.[0]?.created_at || ''
+
     return {
-      total_tools: tools?.length || 0,
+      total_tools: toolsCount || 0,
       monthly_new: monthlyNew,
-      favorites_count: favorites?.length || 0,
-      excluded_count: excluded?.length || 0,
-      last_collection: tools?.[0]?.created_at || ''
+      favorites_count: favoritesCount || 0,
+      excluded_count: excludedCount || 0,
+      last_collection: lastCollection
     }
   }
 }
