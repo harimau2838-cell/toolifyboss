@@ -64,7 +64,7 @@ export default function Home() {
           </p>
         </div>
         <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h3 className="text-sm font-medium text-gray-500">本月新增</h3>
+          <h3 className="text-sm font-medium text-gray-500">最近新增</h3>
           <p className="text-2xl font-bold text-green-600">
             {loading ? '...' : stats.monthly_new.toLocaleString()}
           </p>
