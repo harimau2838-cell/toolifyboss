@@ -21,11 +21,23 @@ export default function Home() {
   const loadStats = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/stats')
+      // 添加时间戳防止缓存
+      const timestamp = new Date().getTime()
+      const response = await fetch(`/api/stats?t=${timestamp}`, {
+        cache: 'no-cache',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      })
       const result = await response.json()
+
+      console.log('API响应:', result) // 添加调试日志
 
       if (result.success) {
         setStats(result.data)
+      } else {
+        console.error('API返回错误:', result)
       }
     } catch (error) {
       console.error('Failed to load stats:', error)
