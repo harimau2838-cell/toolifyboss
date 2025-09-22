@@ -32,7 +32,7 @@ export const toolsApi = {
     // 获取所有工具数据 - 简单可靠的方法
     const { data: tools, error: toolsError } = await supabase
       .from('toolify_tools')
-      .select('id, created_at, collected_at')
+      .select('id, created_at, collected_at, collection_batch')
 
     const { data: favorites, error: favoritesError } = await supabase
       .from('user_actions')
