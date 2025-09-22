@@ -48,12 +48,12 @@ export const toolsApi = {
       throw toolsError || favoritesError || excludedError
     }
 
-    // 计算最近新增 - 简化逻辑，显示今天采集的数据
+    // 计算今日数据 - 显示数据库中今天的记录数（实时更新）
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
-    // 获取今天创建的记录数
-    const todayNew = tools?.filter(tool => {
+    // 获取数据库中今天创建且仍存在的记录数
+    const todayRecords = tools?.filter(tool => {
       const toolDate = new Date(tool.created_at!)
       const toolDay = new Date(toolDate.getFullYear(), toolDate.getMonth(), toolDate.getDate())
       return toolDay.getTime() === today.getTime()
@@ -74,11 +74,11 @@ export const toolsApi = {
       lastCollection = sortedTools[0].collected_at || sortedTools[0].created_at || ''
     }
 
-    console.log(`统计API调试: tools=${tools?.length}, batches=${uniqueBatches.length}, todayNew=${todayNew}`)
+    console.log(`统计API调试: total=${tools?.length}, batches=${uniqueBatches.length}, todayRecords=${todayRecords}`)
 
     return {
       total_tools: tools?.length || 0,
-      monthly_new: todayNew,  // 显示今天新增的数据
+      monthly_new: todayRecords,  // 显示数据库中今天的记录数（会随删除实时更新）
       favorites_count: favorites?.length || 0,
       excluded_count: excluded?.length || 0,
       last_collection: lastCollection

@@ -33,7 +33,33 @@ if response.status_code == 200:
 else:
     print(f"Failed to query database: {response.status_code}")
 
-# 2. 检查API
+# 2. 模拟统计逻辑
+print("\n=== Simulate Stats Logic ===")
+if data:
+    from datetime import datetime
+
+    # 计算总数
+    total = len(data)
+
+    # 计算今日记录数
+    now = datetime.now()
+    today = datetime(now.year, now.month, now.day)
+
+    today_records = 0
+    for record in data:
+        created_str = record.get('created_at', '')
+        if created_str:
+            # 解析日期字符串 (ISO format)
+            created_dt = datetime.fromisoformat(created_str.replace('Z', '+00:00').replace('+00:00', ''))
+            created_day = datetime(created_dt.year, created_dt.month, created_dt.day)
+            if created_day == today:
+                today_records += 1
+
+    print(f"Simulated stats:")
+    print(f"  Total tools: {total}")
+    print(f"  Today records: {today_records}")
+
+# 3. 检查API
 print("\n=== API Check ===")
 try:
     api_response = requests.get("https://toolifyaoss.vercel.app/api/stats")
