@@ -407,6 +407,13 @@ jobs:
                           time.sleep(5)
 
                   print(f"✅ 采集完成！共获取 {len(tools_data)} 条数据")
+
+                  # 输出采集数据样本用于调试
+                  if tools_data:
+                      print("📋 采集数据样本（前3条）:")
+                      for i, tool in enumerate(tools_data[:3]):
+                          print(f"   {i+1}. {tool.get('tool_name', 'N/A')} - {tool.get('monthly_visits', 'N/A')}")
+
                   return tools_data[:target_count]
 
               except Exception as e:
@@ -418,7 +425,7 @@ jobs:
                   driver.quit()
 
           def upload_to_supabase(tools_data):
-              """上传数据到Supabase"""
+              """上传数据到Supabase - 改进版UPSERT逻辑"""
               if not tools_data:
                   print("❌ 没有数据需要上传")
                   return False
@@ -428,59 +435,103 @@ jobs:
 
               if not url or not key:
                   print("❌ Supabase配置缺失")
+                  print(f"   SUPABASE_URL: {'✅ 已设置' if url else '❌ 未设置'}")
+                  print(f"   SUPABASE_ANON_KEY: {'✅ 已设置' if key else '❌ 未设置'}")
                   return False
 
-              # 清理环境变量中的无效字符和GitHub标记
+              # 清理环境变量
               url = url.strip()
               key = key.strip()
 
-              # 移除可能的GitHub标记
-              if '***' in key:
-                  print("⚠️ 上传时检测到GitHub标记，清理中...")
-                  key = key.replace('***', '')
+              print(f"📤 准备上传 {len(tools_data)} 条数据到: {url[:50]}...")
+              print(f"🔑 API密钥长度: {len(key)} 字符")
 
-              # 移除其他可能的无效字符
-              import re
-              key = re.sub(r'[^\w\-\.]', '', key)  # 只保留字母数字和.-_
-
-              print(f"📤 上传到: {url[:50]}...")
-              print(f"🔑 上传密钥长度: {len(key)} 字符")
-
-              headers = {
+              # 先测试连接
+              test_headers = {
                   'apikey': key,
                   'Authorization': f'Bearer {key}',
-                  'Content-Type': 'application/json',
-                  'Prefer': 'resolution=merge-duplicates'
+                  'Content-Type': 'application/json'
               }
 
-              # 批量上传
-              batch_size = 100
+              try:
+                  print("🔍 测试数据库连接...")
+                  test_response = requests.get(f'{url}/rest/v1/toolify_tools?limit=1', headers=test_headers, timeout=10)
+                  print(f"📊 连接测试响应: {test_response.status_code}")
+
+                  if test_response.status_code != 200:
+                      print(f"❌ 数据库连接失败: {test_response.text}")
+                      return False
+                  else:
+                      print("✅ 数据库连接正常")
+              except Exception as e:
+                  print(f"❌ 数据库连接异常: {e}")
+                  return False
+
+              # 使用单条UPSERT确保数据正确插入
               success_count = 0
+              error_count = 0
 
-              for i in range(0, len(tools_data), batch_size):
-                  batch = tools_data[i:i + batch_size]
-
+              for i, tool in enumerate(tools_data):
                   try:
+                      # 为每个工具执行单独的UPSERT操作
+                      upsert_headers = {
+                          'apikey': key,
+                          'Authorization': f'Bearer {key}',
+                          'Content-Type': 'application/json',
+                          'Prefer': 'resolution=merge-duplicates'
+                      }
+
                       response = requests.post(
                           f'{url}/rest/v1/toolify_tools',
-                          headers=headers,
-                          json=batch,
+                          headers=upsert_headers,
+                          json=tool,
                           timeout=30
                       )
 
                       if response.status_code in [200, 201]:
-                          success_count += len(batch)
-                          print(f"✅ 批次 {i//batch_size + 1} 上传成功 ({len(batch)} 条)")
+                          success_count += 1
+                          if (i + 1) % 50 == 0:
+                              print(f"📊 已处理 {i + 1}/{len(tools_data)} 条数据...")
                       elif response.status_code == 409:
-                          print(f"⚠️ 批次 {i//batch_size + 1} 包含重复数据，跳过")
-                          success_count += len(batch)  # 重复数据也算成功，因为数据已存在
+                          # 如果遇到冲突，尝试更新现有记录
+                          try:
+                              update_headers = {
+                                  'apikey': key,
+                                  'Authorization': f'Bearer {key}',
+                                  'Content-Type': 'application/json'
+                              }
+
+                              update_response = requests.patch(
+                                  f'{url}/rest/v1/toolify_tools?tool_name=eq.{tool["tool_name"]}',
+                                  headers=update_headers,
+                                  json=tool,
+                                  timeout=30
+                              )
+
+                              if update_response.status_code in [200, 204]:
+                                  success_count += 1
+                                  if (i + 1) % 50 == 0:
+                                      print(f"📊 已更新 {i + 1}/{len(tools_data)} 条数据...")
+                              else:
+                                  error_count += 1
+                                  print(f"❌ 更新失败 {tool['tool_name']}: {update_response.status_code} {update_response.text}")
+                          except Exception as update_e:
+                              error_count += 1
+                              print(f"❌ 更新异常 {tool['tool_name']}: {update_e}")
                       else:
-                          print(f"❌ 批次 {i//batch_size + 1} 上传失败: {response.status_code} {response.text}")
+                          error_count += 1
+                          print(f"❌ 上传失败 {tool['tool_name']}: {response.status_code} {response.text}")
 
                   except Exception as e:
-                      print(f"❌ 批次 {i//batch_size + 1} 上传出错: {e}")
+                      error_count += 1
+                      print(f"❌ 处理异常 {tool.get('tool_name', 'Unknown')}: {e}")
 
-              print(f"📊 上传完成: {success_count}/{len(tools_data)} 条数据成功")
+              print(f"📊 上传完成统计:")
+              print(f"   ✅ 成功: {success_count} 条")
+              print(f"   ❌ 失败: {error_count} 条")
+              print(f"   📈 成功率: {success_count/(success_count+error_count)*100:.1f}%")
+
+              # 只要有部分成功就认为任务成功
               return success_count > 0
 
           def main():
