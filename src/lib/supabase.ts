@@ -32,32 +32,31 @@ export const toolsApi = {
     // 获取所有工具数据 - 简单可靠的方法
     const { data: tools, error: toolsError } = await supabase
       .from('toolify_tools')
-      .select('id, created_at, collected_at, collection_batch')
+      .select('id, tool_name, created_at, collected_at, collection_batch')
 
     const { data: favorites, error: favoritesError } = await supabase
       .from('user_actions')
-      .select('id')
+      .select('tool_name')
       .eq('action_type', 'favorite')
 
     const { data: excluded, error: excludedError } = await supabase
       .from('user_actions')
-      .select('id')
+      .select('tool_name')
       .eq('action_type', 'exclude')
 
     if (toolsError || favoritesError || excludedError) {
       throw toolsError || favoritesError || excludedError
     }
 
-    // 计算今日数据 - 显示数据库中今天的记录数（实时更新）
-    const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    // 计算未操作的工具数量（既没有关注也没有排除）
+    const actionedToolNames = new Set([
+      ...(favorites?.map(f => f.tool_name) || []),
+      ...(excluded?.map(e => e.tool_name) || [])
+    ])
 
-    // 获取数据库中今天创建且仍存在的记录数
-    const todayRecords = tools?.filter(tool => {
-      const toolDate = new Date(tool.created_at!)
-      const toolDay = new Date(toolDate.getFullYear(), toolDate.getMonth(), toolDate.getDate())
-      return toolDay.getTime() === today.getTime()
-    }).length || 0
+    const unactionedCount = tools?.filter(tool =>
+      !actionedToolNames.has(tool.tool_name)
+    ).length || 0
 
     // 获取不同采集批次的数据（用于调试）
     const batches = tools?.map(tool => tool.collection_batch) || []
@@ -74,11 +73,11 @@ export const toolsApi = {
       lastCollection = sortedTools[0].collected_at || sortedTools[0].created_at || ''
     }
 
-    console.log(`统计API调试: total=${tools?.length}, batches=${uniqueBatches.length}, todayRecords=${todayRecords}`)
+    console.log(`统计API调试: total=${tools?.length}, batches=${uniqueBatches.length}, unactioned=${unactionedCount}`)
 
     return {
       total_tools: tools?.length || 0,
-      monthly_new: todayRecords,  // 显示数据库中今天的记录数（会随删除实时更新）
+      monthly_new: unactionedCount,  // 显示未操作的工具数量（既没有关注也没有排除）
       favorites_count: favorites?.length || 0,
       excluded_count: excluded?.length || 0,
       last_collection: lastCollection
