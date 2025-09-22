@@ -11,6 +11,11 @@ on:
         required: false
         default: '3000'
         type: string
+      quick_test:
+        description: '快速测试模式 (使用模拟数据)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   collect:
@@ -29,12 +34,26 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install -r requirements.txt
+          echo "📦 开始安装Python依赖包..."
+          echo "🔄 升级pip..."
+          python -m pip install --upgrade pip --timeout 60
+
+          echo "📋 安装依赖包（带超时和进度显示）..."
+          pip install --timeout 300 --verbose -r requirements.txt
+
+          echo "✅ Python依赖安装完成"
+          echo "📊 已安装的包列表:"
+          pip list | grep -E "(selenium|requests|webdriver-manager|python-dotenv)"
 
       - name: Install Chrome and ChromeDriver
+        timeout-minutes: 10
         run: |
-          sudo apt-get update
+          echo "🌐 开始安装Chrome浏览器..."
+          sudo apt-get update -q
           sudo apt-get install -y google-chrome-stable unzip wget
+
+          echo "✅ Chrome安装完成"
+          google-chrome --version
 
           # 获取Chrome版本
           CHROME_VERSION=$(google-chrome --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1)
@@ -603,7 +622,15 @@ jobs:
           echo "🔧 环境变量检查:"
           echo "   TARGET_COUNT输入: ${{ github.event.inputs.target_count }}"
           echo "   INPUT_TARGET_COUNT: $INPUT_TARGET_COUNT"
-          python scripts/production-collector.py
+          echo "   QUICK_TEST模式: ${{ github.event.inputs.quick_test }}"
+
+          if [ "${{ github.event.inputs.quick_test }}" = "true" ]; then
+            echo "🧪 运行快速测试模式..."
+            python scripts/quick-test-collector.py
+          else
+            echo "🔄 运行完整数据采集..."
+            python scripts/production-collector.py
+          fi
 
       - name: Upload backup on failure
         if: failure()
