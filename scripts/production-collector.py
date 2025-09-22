@@ -340,39 +340,83 @@ def upload_to_supabase(tools_data):
         print(f"❌ 数据库连接异常: {e}")
         return False
 
-    # 逐条上传
+    # 逐条上传，增加重试机制
     success_count = 0
     for i, tool in enumerate(tools_data):
-        try:
-            response = requests.post(
-                f'{url}/rest/v1/toolify_tools',
-                headers=headers,
-                json=tool,
-                timeout=30
-            )
+        max_retries = 3
+        retry_count = 0
 
-            if response.status_code in [200, 201]:
-                success_count += 1
-                if (i + 1) % 50 == 0:
-                    print(f"📊 已处理 {i + 1}/{len(tools_data)} 条数据...")
-            elif response.status_code == 409:
-                # 重复数据，尝试更新
-                try:
-                    update_response = requests.patch(
-                        f'{url}/rest/v1/toolify_tools?tool_name=eq.{tool["tool_name"]}',
-                        headers=headers,
-                        json=tool,
-                        timeout=30
-                    )
-                    if update_response.status_code in [200, 204]:
-                        success_count += 1
-                except:
-                    pass
-            else:
-                print(f"❌ 上传失败 {tool['tool_name']}: {response.status_code}")
+        while retry_count < max_retries:
+            try:
+                response = requests.post(
+                    f'{url}/rest/v1/toolify_tools',
+                    headers=headers,
+                    json=tool,
+                    timeout=45  # 增加超时时间
+                )
 
-        except Exception as e:
-            print(f"❌ 处理异常 {tool.get('tool_name', 'Unknown')}: {e}")
+                if response.status_code in [200, 201]:
+                    success_count += 1
+                    if (i + 1) % 25 == 0:  # 更频繁的进度报告
+                        print(f"📊 已处理 {i + 1}/{len(tools_data)} 条数据...")
+                    break  # 成功，退出重试循环
+
+                elif response.status_code == 409:
+                    # 重复数据，尝试更新
+                    try:
+                        update_response = requests.patch(
+                            f'{url}/rest/v1/toolify_tools?tool_name=eq.{tool["tool_name"]}',
+                            headers=headers,
+                            json=tool,
+                            timeout=45
+                        )
+                        if update_response.status_code in [200, 204]:
+                            success_count += 1
+                        break  # 无论成功失败，都退出重试
+                    except:
+                        break
+
+                elif response.status_code in [502, 503, 504]:
+                    # 服务器错误，等待后重试
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        wait_time = retry_count * 2  # 指数退避
+                        print(f"⚠️ 服务器错误 {response.status_code}，{wait_time}秒后重试 ({retry_count}/{max_retries})")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        print(f"❌ 重试失败 {tool['tool_name']}: {response.status_code}")
+                        break
+
+                else:
+                    print(f"❌ 上传失败 {tool['tool_name']}: {response.status_code}")
+                    break
+
+            except requests.exceptions.Timeout:
+                retry_count += 1
+                if retry_count < max_retries:
+                    wait_time = retry_count * 2
+                    print(f"⚠️ 请求超时，{wait_time}秒后重试 ({retry_count}/{max_retries})")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"❌ 超时失败 {tool.get('tool_name', 'Unknown')}")
+                    break
+
+            except Exception as e:
+                retry_count += 1
+                if retry_count < max_retries:
+                    wait_time = retry_count * 2
+                    print(f"⚠️ 网络异常，{wait_time}秒后重试 ({retry_count}/{max_retries}): {e}")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"❌ 处理异常 {tool.get('tool_name', 'Unknown')}: {e}")
+                    break
+
+        # 每上传10条数据后暂停一下，避免过快请求
+        if (i + 1) % 10 == 0:
+            time.sleep(1)
 
     print(f"📊 上传完成: {success_count}/{len(tools_data)} 成功")
     return success_count > 0
