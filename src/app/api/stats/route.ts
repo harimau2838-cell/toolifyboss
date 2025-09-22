@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { toolsApi } from '@/lib/supabase'
 
+// 强制动态渲染
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const stats = await toolsApi.getStats()

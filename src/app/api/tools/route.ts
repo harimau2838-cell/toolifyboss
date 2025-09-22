@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { toolsApi } from '@/lib/supabase'
 
+// 强制动态渲染
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
+    const { searchParams } = request.nextUrl
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '50')
     const search = searchParams.get('search') || ''
