@@ -48,24 +48,20 @@ export const toolsApi = {
       throw toolsError || favoritesError || excludedError
     }
 
-    // 计算最近7天新增（更合理的指标）
+    // 计算最近新增 - 简化逻辑，显示今天采集的数据
     const now = new Date()
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
-    // 获取不同采集批次的数据
+    // 获取今天创建的记录数
+    const todayNew = tools?.filter(tool => {
+      const toolDate = new Date(tool.created_at!)
+      const toolDay = new Date(toolDate.getFullYear(), toolDate.getMonth(), toolDate.getDate())
+      return toolDay.getTime() === today.getTime()
+    }).length || 0
+
+    // 获取不同采集批次的数据（用于调试）
     const batches = tools?.map(tool => tool.collection_batch) || []
     const uniqueBatches = Array.from(new Set(batches))
-
-    let recentNew = 0
-    if (uniqueBatches.length <= 1) {
-      // 如果只有一个批次，说明是首次采集，显示0
-      recentNew = 0
-    } else {
-      // 如果有多个批次，计算最近7天的数据
-      recentNew = tools?.filter(tool =>
-        new Date(tool.created_at!) >= sevenDaysAgo
-      ).length || 0
-    }
 
     // 获取最后采集时间 - 优先使用collected_at
     let lastCollection = ''
@@ -78,11 +74,11 @@ export const toolsApi = {
       lastCollection = sortedTools[0].collected_at || sortedTools[0].created_at || ''
     }
 
-    console.log(`统计API调试: tools=${tools?.length}, batches=${uniqueBatches.length}, recentNew=${recentNew}`)
+    console.log(`统计API调试: tools=${tools?.length}, batches=${uniqueBatches.length}, todayNew=${todayNew}`)
 
     return {
       total_tools: tools?.length || 0,
-      monthly_new: recentNew,  // 实际上是"最近新增"，首次采集时为0
+      monthly_new: todayNew,  // 显示今天新增的数据
       favorites_count: favorites?.length || 0,
       excluded_count: excluded?.length || 0,
       last_collection: lastCollection
