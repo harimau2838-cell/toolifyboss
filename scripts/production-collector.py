@@ -393,9 +393,9 @@ def main():
         target_count = 300
         print(f"🎯 默认目标数量: {target_count}")
 
-    # 限制最大数量避免超时
-    target_count = min(target_count, 500)
-    max_scroll_attempts = min(target_count // 20, 15)  # 动态计算滚动次数
+    # 限制最大数量避免超时 - 提高限制以支持更多数据采集
+    target_count = min(target_count, 1000)  # 提高到1000条
+    max_scroll_attempts = min(target_count // 10, 50)  # 增加滚动次数，每10条数据1次滚动，最多50次
 
     print(f"🎯 最终采集目标: {target_count} 条")
     print(f"🔄 最大滚动次数: {max_scroll_attempts}")

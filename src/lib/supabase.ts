@@ -29,47 +29,50 @@ export const toolsApi = {
 
   // 获取工具统计数据
   async getStats() {
-    // 使用count查询获取精确计数，避免缓存问题
-    const { count: toolsCount, error: toolsError } = await supabase
+    // 获取所有工具数据 - 简单可靠的方法
+    const { data: tools, error: toolsError } = await supabase
       .from('toolify_tools')
-      .select('*', { count: 'exact', head: true })
+      .select('id, created_at, collected_at')
 
-    const { count: favoritesCount, error: favoritesError } = await supabase
+    const { data: favorites, error: favoritesError } = await supabase
       .from('user_actions')
-      .select('*', { count: 'exact', head: true })
+      .select('id')
       .eq('action_type', 'favorite')
 
-    const { count: excludedCount, error: excludedError } = await supabase
+    const { data: excluded, error: excludedError } = await supabase
       .from('user_actions')
-      .select('*', { count: 'exact', head: true })
+      .select('id')
       .eq('action_type', 'exclude')
 
-    // 获取最新记录用于计算本月新增和最后采集时间
-    const { data: recentTools, error: recentError } = await supabase
-      .from('toolify_tools')
-      .select('created_at, collected_at')
-      .order('created_at', { ascending: false })
-      .limit(50)
-
-    if (toolsError || favoritesError || excludedError || recentError) {
-      throw toolsError || favoritesError || excludedError || recentError
+    if (toolsError || favoritesError || excludedError) {
+      throw toolsError || favoritesError || excludedError
     }
 
     // 计算本月新增
     const now = new Date()
     const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const monthlyNew = recentTools?.filter(tool =>
+    const monthlyNew = tools?.filter(tool =>
       new Date(tool.created_at!) >= thisMonth
     ).length || 0
 
-    // 获取最后采集时间
-    const lastCollection = recentTools?.[0]?.collected_at || recentTools?.[0]?.created_at || ''
+    // 获取最后采集时间 - 优先使用collected_at
+    let lastCollection = ''
+    if (tools && tools.length > 0) {
+      const sortedTools = tools.sort((a, b) => {
+        const timeA = new Date(a.collected_at || a.created_at || 0).getTime()
+        const timeB = new Date(b.collected_at || b.created_at || 0).getTime()
+        return timeB - timeA
+      })
+      lastCollection = sortedTools[0].collected_at || sortedTools[0].created_at || ''
+    }
+
+    console.log(`统计API调试: tools=${tools?.length}, favorites=${favorites?.length}, excluded=${excluded?.length}`)
 
     return {
-      total_tools: toolsCount || 0,
+      total_tools: tools?.length || 0,
       monthly_new: monthlyNew,
-      favorites_count: favoritesCount || 0,
-      excluded_count: excludedCount || 0,
+      favorites_count: favorites?.length || 0,
+      excluded_count: excluded?.length || 0,
       last_collection: lastCollection
     }
   }
