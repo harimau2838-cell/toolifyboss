@@ -11,8 +11,12 @@ export const toolsApi = {
   async getTools(page = 1, limit = 50, search = '', sortBy = 'ranking', sortOrder = 'asc') {
     let query = supabase
       .from('toolify_tools')
-      .select('*')
-      .range((page - 1) * limit, page * limit - 1)
+      .select('*', { count: 'exact' })
+
+    // 只有在limit小于10000时才使用分页，否则获取所有数据
+    if (limit < 10000) {
+      query = query.range((page - 1) * limit, page * limit - 1)
+    }
 
     if (search) {
       query = query.or(`tool_name.ilike.%${search}%,description.ilike.%${search}%,tags.ilike.%${search}%`)
