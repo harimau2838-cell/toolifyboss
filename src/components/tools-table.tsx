@@ -46,8 +46,16 @@ export function ToolsTable({ onFavorite, onExclude }: ToolsTableProps) {
   const loadData = async () => {
     try {
       setLoading(true)
-      const result = await toolsApi.getTools(1, 10000) // 加载所有数据，支持最多10000条
-      setData(result.data)
+      // 直接从Supabase获取所有数据，避免API层的限制
+      const { supabase } = await import('@/lib/supabase')
+      const { data: allData, error } = await supabase
+        .from('toolify_tools')
+        .select('*')
+        .order('ranking', { ascending: true })
+
+      if (error) throw error
+
+      setData(allData || [])
     } catch (error) {
       console.error('Failed to load tools:', error)
     } finally {

@@ -13,8 +13,12 @@ export const toolsApi = {
       .from('toolify_tools')
       .select('*', { count: 'exact' })
 
-    // 只有在limit小于10000时才使用分页，否则获取所有数据
-    if (limit < 10000) {
+    // 处理分页：大数据量时使用range指定范围
+    if (limit >= 10000) {
+      // 获取所有数据：从0到limit-1
+      query = query.range(0, limit - 1)
+    } else {
+      // 正常分页
       query = query.range((page - 1) * limit, page * limit - 1)
     }
 
