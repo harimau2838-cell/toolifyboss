@@ -350,90 +350,85 @@ def upload_to_supabase(tools_data):
         print(f"❌ 数据库连接异常: {e}")
         return False
 
-    # 逐条上传，增加重试机制
-    print(f"🚀 开始逐条上传 {len(tools_data)} 条数据...")
+    # 分批上传，提高效率
+    batch_size = 100  # 每批100条数据
+    print(f"🚀 开始分批上传 {len(tools_data)} 条数据（每批{batch_size}条）...")
     success_count = 0
+    total_batches = (len(tools_data) + batch_size - 1) // batch_size
 
-    for i, tool in enumerate(tools_data):
-        if i % 50 == 0:
-            print(f"📊 开始处理第 {i+1} 条数据: {tool.get('tool_name', 'Unknown')[:30]}...")
+    for batch_num in range(total_batches):
+        start_idx = batch_num * batch_size
+        end_idx = min(start_idx + batch_size, len(tools_data))
+        batch_data = tools_data[start_idx:end_idx]
 
-        if i == 0:
-            print(f"🔍 首条数据详情: {tool}")  # 显示第一条数据的完整内容
+        print(f"📦 上传第 {batch_num + 1}/{total_batches} 批数据 (第{start_idx + 1}-{end_idx}条)...")
+
+        if batch_num == 0:
+            print(f"🔍 首批数据示例: {batch_data[0]}")  # 显示第一批的第一条数据
+
         max_retries = 3
         retry_count = 0
 
         while retry_count < max_retries:
             try:
+                # 使用Prefer: resolution=merge-duplicates进行upsert批量插入
+                batch_headers = headers.copy()
+                batch_headers['Prefer'] = 'resolution=merge-duplicates'
+
                 response = requests.post(
                     f'{url}/rest/v1/toolify_tools',
-                    headers=headers,
-                    json=tool,
-                    timeout=45  # 增加超时时间
+                    headers=batch_headers,
+                    json=batch_data,
+                    timeout=60  # 批量上传需要更长超时时间
                 )
 
                 if response.status_code in [200, 201]:
-                    success_count += 1
-                    if (i + 1) % 25 == 0:  # 更频繁的进度报告
-                        print(f"📊 已处理 {i + 1}/{len(tools_data)} 条数据...")
+                    batch_success = len(batch_data)
+                    success_count += batch_success
+                    print(f"✅ 第 {batch_num + 1} 批上传成功 ({batch_success}条)，累计: {success_count}/{len(tools_data)}")
                     break  # 成功，退出重试循环
-
-                elif response.status_code == 409:
-                    # 重复数据，尝试更新
-                    try:
-                        update_response = requests.patch(
-                            f'{url}/rest/v1/toolify_tools?tool_name=eq.{tool["tool_name"]}',
-                            headers=headers,
-                            json=tool,
-                            timeout=45
-                        )
-                        if update_response.status_code in [200, 204]:
-                            success_count += 1
-                        break  # 无论成功失败，都退出重试
-                    except:
-                        break
 
                 elif response.status_code in [502, 503, 504]:
                     # 服务器错误，等待后重试
                     retry_count += 1
                     if retry_count < max_retries:
-                        wait_time = retry_count * 2  # 指数退避
-                        print(f"⚠️ 服务器错误 {response.status_code}，{wait_time}秒后重试 ({retry_count}/{max_retries})")
+                        wait_time = retry_count * 3  # 批量上传使用更长的退避时间
+                        print(f"⚠️ 服务器错误 {response.status_code}，{wait_time}秒后重试第{batch_num + 1}批 ({retry_count}/{max_retries})")
                         time.sleep(wait_time)
                         continue
                     else:
-                        print(f"❌ 重试失败 {tool['tool_name']}: {response.status_code}")
+                        print(f"❌ 第 {batch_num + 1} 批重试失败: {response.status_code} - {response.text[:200]}")
                         break
 
                 else:
-                    print(f"❌ 上传失败 {tool['tool_name']}: {response.status_code}")
+                    print(f"❌ 第 {batch_num + 1} 批上传失败: {response.status_code} - {response.text[:200]}")
                     break
 
             except requests.exceptions.Timeout:
                 retry_count += 1
                 if retry_count < max_retries:
-                    wait_time = retry_count * 2
-                    print(f"⚠️ 请求超时，{wait_time}秒后重试 ({retry_count}/{max_retries})")
+                    wait_time = retry_count * 3
+                    print(f"⚠️ 第 {batch_num + 1} 批请求超时，{wait_time}秒后重试 ({retry_count}/{max_retries})")
                     time.sleep(wait_time)
                     continue
                 else:
-                    print(f"❌ 超时失败 {tool.get('tool_name', 'Unknown')}")
+                    print(f"❌ 第 {batch_num + 1} 批超时失败")
                     break
 
             except Exception as e:
                 retry_count += 1
                 if retry_count < max_retries:
-                    wait_time = retry_count * 2
-                    print(f"⚠️ 网络异常，{wait_time}秒后重试 ({retry_count}/{max_retries}): {e}")
+                    wait_time = retry_count * 3
+                    print(f"⚠️ 第 {batch_num + 1} 批网络异常，{wait_time}秒后重试 ({retry_count}/{max_retries}): {e}")
                     time.sleep(wait_time)
                     continue
                 else:
-                    print(f"❌ 处理异常 {tool.get('tool_name', 'Unknown')}: {e}")
+                    print(f"❌ 第 {batch_num + 1} 批处理异常: {e}")
                     break
 
-        # 每上传10条数据后暂停一下，避免过快请求
-        if (i + 1) % 10 == 0:
-            time.sleep(1)
+        # 每批之间暂停，避免请求过快
+        if batch_num < total_batches - 1:  # 不是最后一批
+            time.sleep(0.5)
 
     print(f"📊 上传完成: {success_count}/{len(tools_data)} 成功")
     return success_count > 0
