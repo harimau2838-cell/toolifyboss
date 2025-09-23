@@ -312,19 +312,21 @@ export function ToolsTable({ onFavorite, onExclude }: ToolsTableProps) {
         cell: ({ row }) => {
           const tool = row.original
           return (
-            <div className="max-w-[200px]">
-              <div className="flex items-center space-x-2">
+            <div className="w-[250px]">
+              <div className="flex items-center gap-1">
                 <a
                   href={tool.tool_url}
                   target="_blank"
                   rel="nofollow noopener noreferrer"
-                  className="font-medium text-blue-600 hover:text-blue-800 flex items-center space-x-1"
+                  className="font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1 min-w-0"
                 >
-                  <span className="truncate">{tool.tool_name}</span>
+                  <span className="truncate block max-w-[200px]" title={tool.tool_name}>
+                    {tool.tool_name}
+                  </span>
                   <ExternalLink className="h-3 w-3 flex-shrink-0" />
                 </a>
               </div>
-              <div className="text-sm text-gray-500 truncate mt-1">
+              <div className="text-sm text-gray-500 truncate mt-1" title={tool.description}>
                 {tool.description}
               </div>
             </div>
@@ -547,7 +549,7 @@ export function ToolsTable({ onFavorite, onExclude }: ToolsTableProps) {
       {/* 表格 */}
       <div className="rounded-md border bg-white">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full" style={{ tableLayout: 'fixed' }}>
             <thead>
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id} className="border-b bg-gray-50/50">
