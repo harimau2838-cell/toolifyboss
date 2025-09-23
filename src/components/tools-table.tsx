@@ -232,26 +232,40 @@ export function ToolsTable({ onFavorite, onExclude }: ToolsTableProps) {
     })
   }
 
-  const toggleSelectAll = () => {
-    if (selectedRows.size === data.length) {
-      setSelectedRows(new Set())
-    } else {
-      setSelectedRows(new Set(data.map(tool => tool.id!)))
-    }
-  }
-
   const columns: ColumnDef<Tool>[] = useMemo(
     () => [
       {
         id: 'select',
-        header: () => (
-          <input
-            type="checkbox"
-            checked={selectedRows.size === data.length && data.length > 0}
-            onChange={toggleSelectAll}
-            className="w-4 h-4"
-          />
-        ),
+        header: ({ table }) => {
+          // 获取当前页的所有行
+          const currentPageRows = table.getRowModel().rows
+          const currentPageIds = currentPageRows.map(row => row.original.id!)
+          const allCurrentPageSelected = currentPageIds.length > 0 &&
+            currentPageIds.every(id => selectedRows.has(id))
+
+          const handleToggle = () => {
+            if (allCurrentPageSelected) {
+              // 取消选择当前页所有行
+              const newSet = new Set(selectedRows)
+              currentPageIds.forEach(id => newSet.delete(id))
+              setSelectedRows(newSet)
+            } else {
+              // 选择当前页所有行
+              const newSet = new Set(selectedRows)
+              currentPageIds.forEach(id => newSet.add(id))
+              setSelectedRows(newSet)
+            }
+          }
+
+          return (
+            <input
+              type="checkbox"
+              checked={allCurrentPageSelected}
+              onChange={handleToggle}
+              className="w-4 h-4"
+            />
+          )
+        },
         cell: ({ row }) => (
           <input
             type="checkbox"
