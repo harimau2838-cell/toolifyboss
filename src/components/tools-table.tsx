@@ -34,6 +34,8 @@ export function ToolsTable({ onFavorite, onExclude }: ToolsTableProps) {
     favorites: [],
     excluded: []
   })
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
+  const [batchLoading, setBatchLoading] = useState(false)
 
   // 加载数据
   useEffect(() => {
@@ -115,8 +117,121 @@ export function ToolsTable({ onFavorite, onExclude }: ToolsTableProps) {
     }
   }
 
+  // 批量操作处理函数
+  const handleBatchFavorite = async () => {
+    if (selectedRows.size === 0) return
+
+    try {
+      setBatchLoading(true)
+      const selectedTools = data.filter(tool => selectedRows.has(tool.id!))
+
+      const response = await fetch('/api/user-actions/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tools: selectedTools,
+          action_type: 'favorite'
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        // 更新本地状态
+        setUserActions(prev => ({
+          ...prev,
+          favorites: Array.from(new Set([...prev.favorites, ...selectedTools.map(t => t.tool_name)]))
+        }))
+        setSelectedRows(new Set())
+        onFavorite?.(selectedTools[0]) // 触发统计更新
+        alert(`成功添加 ${result.data.successful} 个关注`)
+      }
+    } catch (error) {
+      console.error('Batch favorite failed:', error)
+      alert('批量关注失败')
+    } finally {
+      setBatchLoading(false)
+    }
+  }
+
+  const handleBatchExclude = async () => {
+    if (selectedRows.size === 0) return
+
+    try {
+      setBatchLoading(true)
+      const selectedTools = data.filter(tool => selectedRows.has(tool.id!))
+
+      const response = await fetch('/api/user-actions/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tools: selectedTools,
+          action_type: 'exclude'
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        // 更新本地状态
+        setUserActions(prev => ({
+          ...prev,
+          excluded: Array.from(new Set([...prev.excluded, ...selectedTools.map(t => t.tool_name)]))
+        }))
+        setSelectedRows(new Set())
+        onExclude?.(selectedTools[0]) // 触发统计更新
+        alert(`成功添加 ${result.data.successful} 个排除`)
+      }
+    } catch (error) {
+      console.error('Batch exclude failed:', error)
+      alert('批量排除失败')
+    } finally {
+      setBatchLoading(false)
+    }
+  }
+
+  const toggleRowSelection = (id: string) => {
+    setSelectedRows(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(id)) {
+        newSet.delete(id)
+      } else {
+        newSet.add(id)
+      }
+      return newSet
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedRows.size === data.length) {
+      setSelectedRows(new Set())
+    } else {
+      setSelectedRows(new Set(data.map(tool => tool.id!)))
+    }
+  }
+
   const columns: ColumnDef<Tool>[] = useMemo(
     () => [
+      {
+        id: 'select',
+        header: () => (
+          <input
+            type="checkbox"
+            checked={selectedRows.size === data.length && data.length > 0}
+            onChange={toggleSelectAll}
+            className="w-4 h-4"
+          />
+        ),
+        cell: ({ row }) => (
+          <input
+            type="checkbox"
+            checked={selectedRows.has(row.original.id!)}
+            onChange={() => toggleRowSelection(row.original.id!)}
+            className="w-4 h-4"
+          />
+        ),
+        size: 50,
+      },
       {
         accessorKey: 'ranking',
         header: ({ column }) => {
@@ -298,7 +413,7 @@ export function ToolsTable({ onFavorite, onExclude }: ToolsTableProps) {
         size: 150,
       },
     ],
-    [userActions]
+    [userActions, selectedRows, data]
   )
 
   // 过滤掉被排除的工具
@@ -340,20 +455,49 @@ export function ToolsTable({ onFavorite, onExclude }: ToolsTableProps) {
 
   return (
     <div className="w-full space-y-4">
-      {/* 搜索栏 */}
-      <div className="flex items-center space-x-2">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            placeholder="搜索工具名称、描述或标签..."
-            value={globalFilter ?? ''}
-            onChange={(event) => setGlobalFilter(String(event.target.value))}
-            className="pl-10"
-          />
+      {/* 搜索栏和批量操作 */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2 flex-1">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="搜索工具名称、描述或标签..."
+              value={globalFilter ?? ''}
+              onChange={(event) => setGlobalFilter(String(event.target.value))}
+              className="pl-10"
+            />
+          </div>
+          <div className="text-sm text-gray-500">
+            显示 {table.getFilteredRowModel().rows.length} 条工具
+          </div>
         </div>
-        <div className="text-sm text-gray-500">
-          显示 {table.getFilteredRowModel().rows.length} 条工具
-        </div>
+
+        {/* 批量操作按钮 */}
+        {selectedRows.size > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">已选择 {selectedRows.size} 项</span>
+            <Button
+              onClick={handleBatchFavorite}
+              disabled={batchLoading}
+              size="sm"
+              variant="outline"
+              className="gap-1"
+            >
+              <Heart className="h-4 w-4" />
+              批量关注
+            </Button>
+            <Button
+              onClick={handleBatchExclude}
+              disabled={batchLoading}
+              size="sm"
+              variant="outline"
+              className="gap-1"
+            >
+              <X className="h-4 w-4" />
+              批量排除
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* 表格 */}
