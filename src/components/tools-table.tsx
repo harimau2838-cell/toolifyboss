@@ -46,16 +46,38 @@ export function ToolsTable({ onFavorite, onExclude }: ToolsTableProps) {
   const loadData = async () => {
     try {
       setLoading(true)
-      // 直接从Supabase获取所有数据，避免API层的限制
+      // 循环分页获取所有数据，绕过PostgREST的1000条默认限制
       const { supabase } = await import('@/lib/supabase')
-      const { data: allData, error } = await supabase
-        .from('toolify_tools')
-        .select('*')
-        .order('ranking', { ascending: true })
 
-      if (error) throw error
+      let allData: Tool[] = []
+      let batchOffset = 0
+      const batchSize = 1000
+      let hasMore = true
 
-      setData(allData || [])
+      while (hasMore) {
+        const { data: batchData, error } = await supabase
+          .from('toolify_tools')
+          .select('*')
+          .order('ranking', { ascending: true })
+          .range(batchOffset, batchOffset + batchSize - 1)
+
+        if (error) throw error
+
+        if (batchData && batchData.length > 0) {
+          allData = [...allData, ...batchData]
+          batchOffset += batchSize
+
+          // 如果返回的数据少于batchSize，说明已经是最后一批
+          if (batchData.length < batchSize) {
+            hasMore = false
+          }
+        } else {
+          hasMore = false
+        }
+      }
+
+      console.log(`✅ 成功加载 ${allData.length} 条工具数据`)
+      setData(allData)
     } catch (error) {
       console.error('Failed to load tools:', error)
     } finally {
