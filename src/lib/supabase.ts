@@ -37,10 +37,32 @@ export const toolsApi = {
 
   // 获取工具统计数据
   async getStats() {
-    // 获取所有工具数据 - 简单可靠的方法
-    const { data: tools, error: toolsError } = await supabase
-      .from('toolify_tools')
-      .select('id, tool_name, created_at, collected_at, collection_batch')
+    // 循环分页获取所有工具数据，绕过1000条限制
+    let allTools: any[] = []
+    let batchOffset = 0
+    const batchSize = 1000
+    let hasMore = true
+
+    while (hasMore) {
+      const { data: batchData, error } = await supabase
+        .from('toolify_tools')
+        .select('id, tool_name, created_at, collected_at, collection_batch')
+        .range(batchOffset, batchOffset + batchSize - 1)
+
+      if (error) throw error
+
+      if (batchData && batchData.length > 0) {
+        allTools = [...allTools, ...batchData]
+        batchOffset += batchSize
+        if (batchData.length < batchSize) {
+          hasMore = false
+        }
+      } else {
+        hasMore = false
+      }
+    }
+
+    const tools = allTools
 
     const { data: favorites, error: favoritesError } = await supabase
       .from('user_actions')
@@ -52,8 +74,8 @@ export const toolsApi = {
       .select('tool_name')
       .eq('action_type', 'exclude')
 
-    if (toolsError || favoritesError || excludedError) {
-      throw toolsError || favoritesError || excludedError
+    if (favoritesError || excludedError) {
+      throw favoritesError || excludedError
     }
 
     // 计算未操作的工具数量（既没有关注也没有排除）
