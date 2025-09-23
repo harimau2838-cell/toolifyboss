@@ -44,7 +44,7 @@ export function ToolsTable({ onFavorite, onExclude }: ToolsTableProps) {
   const loadData = async () => {
     try {
       setLoading(true)
-      const result = await toolsApi.getTools(1, 1000) // 加载所有数据
+      const result = await toolsApi.getTools(1, 10000) // 加载所有数据，支持最多10000条
       setData(result.data)
     } catch (error) {
       console.error('Failed to load tools:', error)
